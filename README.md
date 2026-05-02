@@ -1,4 +1,4 @@
-# tiktok-discord-rpc
+# Tiktok-Discord-RPC Connector
 
 Mirrors your TikTok LIVE status to Discord Rich Presence. While you're live, your Discord profile shows a "Playing" card with the stream title, viewer count, like count, and clickable buttons that take viewers straight to your TikTok live or profile.
 
