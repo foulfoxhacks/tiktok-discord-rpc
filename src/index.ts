@@ -24,9 +24,11 @@ let viewerCount = 0;
 let likeCount = 0;
 let roomTitle = 'Live Stream';
 let streamStartTime: Date | null = null;
+let reconnectTimer: NodeJS.Timeout | null = null;
 
 // Discord rate limits presence updates to once every 15 seconds.
 const UPDATE_INTERVAL_MS = 15000;
+const RECONNECT_INTERVAL_MS = 5000;
 
 /**
  * Updates the Discord Rich Presence card using the current local state.
@@ -59,6 +61,33 @@ async function updateDiscordPresence() {
 }
 
 /**
+ * Clears local live state and removes the Discord activity card.
+ */
+function clearPresence(reason: string) {
+    console.log(`[TikTok] ${reason}`);
+    isLive = false;
+    viewerCount = 0;
+    likeCount = 0;
+    roomTitle = 'Live Stream';
+    streamStartTime = null;
+
+    rpc.clearActivity().catch(console.error);
+}
+
+/**
+ * Queues a single reconnect attempt so transient TikTok disconnects recover.
+ */
+function scheduleReconnect() {
+    if (reconnectTimer) return;
+
+    console.log(`[TikTok] Reconnecting in ${RECONNECT_INTERVAL_MS / 1000} seconds...`);
+    reconnectTimer = setTimeout(() => {
+        reconnectTimer = null;
+        connectTikTok();
+    }, RECONNECT_INTERVAL_MS);
+}
+
+/**
  * Connects to TikTok and sets up event listeners to maintain local state.
  */
 function connectTikTok() {
@@ -82,8 +111,7 @@ function connectTikTok() {
 
     }).catch(err => {
         console.error('[TikTok] Failed to connect:', err);
-        console.log('[TikTok] Reconnecting in 5 seconds...');
-        setTimeout(connectTikTok, 5000);
+        scheduleReconnect();
     });
 
     // Listen to Viewer Count updates
@@ -102,20 +130,14 @@ function connectTikTok() {
 
     // Handle stream end
     tiktokConnection.on('streamEnd', () => {
-        console.log('[TikTok] Stream ended.');
-        isLive = false;
-        viewerCount = 0;
-        likeCount = 0;
-
-        // Clear Discord presence when stream ends
-        rpc.clearActivity().catch(console.error);
+        clearPresence('Stream ended.');
+        scheduleReconnect();
     });
 
     // Handle disconnects gracefully
     tiktokConnection.on('disconnected', () => {
-        console.log('[TikTok] Disconnected.');
-        isLive = false;
-        rpc.clearActivity().catch(console.error);
+        clearPresence('Disconnected.');
+        scheduleReconnect();
     });
 }
 
